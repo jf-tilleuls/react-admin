@@ -1,20 +1,17 @@
 import React, { createElement } from 'react';
 import PropTypes from 'prop-types';
-import { createStore, compose, applyMiddleware } from 'redux';
 import { Provider } from 'react-redux';
 import createHistory from 'history/createHashHistory';
 import { Switch, Route } from 'react-router-dom';
-import { ConnectedRouter, routerMiddleware } from 'react-router-redux';
+import { ConnectedRouter } from 'react-router-redux';
 import createSagaMiddleware from 'redux-saga';
 import { all, fork } from 'redux-saga/effects';
 import withContext from 'recompose/withContext';
 
-import { USER_LOGOUT } from './actions/authActions';
-
-import createAppReducer from './reducer';
 import { adminSaga } from './sideEffect';
 import { TranslationProvider, defaultI18nProvider } from './i18n';
 import CoreAdminRouter from './CoreAdminRouter';
+import createStore from './service/store';
 
 const CoreAdmin = ({
     appLayout,
@@ -36,12 +33,8 @@ const CoreAdmin = ({
     logoutButton,
     initialState,
     locale = 'en',
+    customStore,
 }) => {
-    const messages = i18nProvider(locale);
-    const appReducer = createAppReducer(customReducers, locale, messages);
-
-    const resettableAppReducer = (state, action) =>
-        appReducer(action.type !== USER_LOGOUT ? state : undefined, action);
     const saga = function* rootSaga() {
         yield all(
             [
@@ -52,16 +45,18 @@ const CoreAdmin = ({
     };
     const sagaMiddleware = createSagaMiddleware();
     const routerHistory = history || createHistory();
-    const store = createStore(
-        resettableAppReducer,
-        initialState,
-        compose(
-            applyMiddleware(sagaMiddleware, routerMiddleware(routerHistory)),
-            typeof window !== 'undefined' && window.devToolsExtension
-                ? window.devToolsExtension()
-                : f => f
-        )
-    );
+
+    const store = customStore
+        ? customStore
+        : createStore(
+              i18nProvider,
+              locale,
+              customReducers,
+              initialState,
+              sagaMiddleware,
+              routerHistory
+          );
+
     sagaMiddleware.run(saga);
 
     const logout = authProvider ? createElement(logoutButton) : null;
@@ -118,6 +113,7 @@ CoreAdmin.propTypes = {
     children: PropTypes.oneOfType([PropTypes.node, PropTypes.func]),
     catchAll: componentPropType,
     customSagas: PropTypes.array,
+    customStore: PropTypes.object,
     customReducers: PropTypes.object,
     customRoutes: PropTypes.array,
     dashboard: componentPropType,
